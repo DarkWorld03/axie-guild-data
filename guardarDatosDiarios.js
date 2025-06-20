@@ -18,13 +18,13 @@ async function guardarDatosDiarios() {
   const fecha = `${yyyy}-${mm}-${dd}`;
 
   const folderPath = path.join(__dirname, "data");
-  const filePath = path.join(folderPath, `${fecha}.json`);
-  const archivoBaseNombre = "2025-06-14.json"; // último día vieja season
-  const filePathBase = path.join(folderPath, archivoBaseNombre);
-
   if (!fs.existsSync(folderPath)) {
     fs.mkdirSync(folderPath);
   }
+
+  const filePath = path.join(folderPath, `${fecha}.json`);
+  const archivoBaseNombre = "2025-06-14.json"; // archivo base fijo
+  const filePathBase = path.join(folderPath, archivoBaseNombre);
 
   const jugadoresHoy = data.players.map((jugador) => ({
     id: jugador.id,
@@ -39,7 +39,7 @@ async function guardarDatosDiarios() {
     return;
   }
 
-  // 2. Cargar archivo base
+  // 2. Cargar archivo base fijo
   let jugadoresBase = null;
   if (fs.existsSync(filePathBase)) {
     try {
@@ -50,10 +50,10 @@ async function guardarDatosDiarios() {
         points: Number(j.points),
       }));
     } catch (err) {
-      console.warn("⚠️ Error leyendo archivo base:", err.message);
+      console.warn("⚠️ Error leyendo archivo base fijo:", err.message);
     }
   } else {
-    console.log(`⚠️ Archivo base ${archivoBaseNombre} no encontrado, guardando archivo del día.`);
+    console.log(`⚠️ Archivo base fijo ${archivoBaseNombre} no encontrado, guardando archivo del día.`);
     guardarArchivo(filePath, fecha, jugadoresHoy);
     return;
   }
@@ -64,21 +64,60 @@ async function guardarDatosDiarios() {
     dictBase[j.id] = j.points;
   });
 
-  const jugadoresComunes = jugadoresHoy.filter((j) => dictBase.hasOwnProperty(j.id));
+  const jugadoresComunesBase = jugadoresHoy.filter((j) => dictBase.hasOwnProperty(j.id));
 
-  if (jugadoresComunes.length === 0) {
-    console.log("⚠️ No hay jugadores en común con el archivo base. No se guardó archivo.");
+  if (jugadoresComunesBase.length === 0) {
+    console.log("⚠️ No hay jugadores en común con el archivo base fijo. No se guardó archivo.");
     return;
   }
 
-  const todosIgualesBase = jugadoresComunes.every((j) => dictBase[j.id] === j.points);
+  const todosIgualesBase = jugadoresComunesBase.every((j) => dictBase[j.id] === j.points);
 
   if (todosIgualesBase) {
-    console.log("ℹ️ Los puntos son iguales al archivo base, temporada no ha comenzado. No se guardó archivo.");
+    console.log("ℹ️ Los puntos son iguales al archivo base fijo, temporada no ha comenzado. No se guardó archivo.");
     return;
   }
 
-  // 4. Guardar si hay cambios válidos en jugadores comunes
+  // --- NUEVA PARTE: comparar con el último archivo guardado en 'data' para evitar guardar repetidos ---
+
+  // Obtener archivos JSON en la carpeta 'data' excluyendo el archivo de hoy
+  const archivos = fs.readdirSync(folderPath)
+    .filter(f => f.endsWith(".json") && f !== `${fecha}.json`);
+
+  if (archivos.length > 0) {
+    // Ordenar para obtener el archivo más reciente
+    const ultimoArchivo = archivos.sort().reverse()[0];
+    const filePathUltimo = path.join(folderPath, ultimoArchivo);
+
+    try {
+      const rawUltimo = fs.readFileSync(filePathUltimo, "utf-8");
+      const datosUltimo = JSON.parse(rawUltimo);
+      const jugadoresUltimo = datosUltimo.players.map(j => ({
+        id: j.id,
+        points: Number(j.points),
+      }));
+
+      const dictUltimo = {};
+      jugadoresUltimo.forEach(j => {
+        dictUltimo[j.id] = j.points;
+      });
+
+      const jugadoresComunesUltimo = jugadoresHoy.filter(j => dictUltimo.hasOwnProperty(j.id));
+
+      if (jugadoresComunesUltimo.length > 0) {
+        const todosIgualesUltimo = jugadoresComunesUltimo.every(j => dictUltimo[j.id] === j.points);
+        if (todosIgualesUltimo) {
+          console.log("ℹ️ Los puntos son iguales al último archivo guardado. No se guardó archivo.");
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ Error leyendo último archivo guardado:", err.message);
+      // Si error leyendo último archivo, seguimos para guardar
+    }
+  }
+
+  // 4. Guardar archivo si pasó todas las verificaciones
   guardarArchivo(filePath, fecha, jugadoresHoy);
 }
 
