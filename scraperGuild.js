@@ -1,5 +1,7 @@
+// scraperGuild.js
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+const fs = require("fs");
 
 puppeteer.use(StealthPlugin());
 
@@ -30,15 +32,25 @@ async function scrapeGuildData() {
       }
     });
 
+    // <-- Cambio aquí: timeout 0 para no fallar si la página tarda mucho
     await page.goto("https://axieclassic.com/guilds/mGfOIl8T", {
       waitUntil: "domcontentloaded",
-      timeout: 60000,
+      timeout: 0,
     });
 
-    await page.waitForSelector('a[href^="/profile/"]', { timeout: 60000 });
-    await page.waitForSelector("span.text-base.font-semibold", { timeout: 60000 });
+    // <-- Manejo de error para detectar si no encuentra selectores
+    try {
+      await page.waitForSelector('a[href^="/profile/"]', { timeout: 60000 });
+      await page.waitForSelector("span.text-base.font-semibold", { timeout: 60000 });
+    } catch (err) {
+      const html = await page.content();
+      fs.writeFileSync("error-page.html", html);
+      console.error("❌ No se encontró el selector. HTML guardado en error-page.html");
+      throw err;
+    }
 
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // <-- Pequeño delay extra para esperar que cargue contenido dinámico
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
     const guildData = await page.evaluate(() => {
       const guildName =

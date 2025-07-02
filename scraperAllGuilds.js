@@ -1,3 +1,4 @@
+// scraperAllGuilds.js
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 
@@ -31,9 +32,10 @@ async function scrapeAllGuilds() {
       }
     });
 
+    // <-- Cambio aquí: timeout 0 para no fallar si la página tarda mucho
     await page.goto("https://axieclassic.com/guilds", {
       waitUntil: "domcontentloaded",
-      timeout: 60000,
+      timeout: 0,
     });
 
     console.log("✅ Página de guilds cargada correctamente.");
